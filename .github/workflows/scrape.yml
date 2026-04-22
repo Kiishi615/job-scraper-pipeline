@@ -67,3 +67,12 @@ jobs:
           name: pipeline-log-${{ github.run_id }}
           path: data/pipeline.log
           retention-days: 7
+
+      - name: Upload debug screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots-${{ github.run_id }}
+          path: data/*.png
+          retention-days: 3
+          if-no-files-found: ignore

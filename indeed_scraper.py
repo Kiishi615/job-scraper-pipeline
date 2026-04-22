@@ -89,6 +89,9 @@ def indeed_scraper():
             count = job_cards.count()
             if count == 0:
                 logger.warning("Indeed: No job cards found after search")
+                # Save screenshot so we can see what Indeed is actually showing
+                page.screenshot(path="./data/indeed_debug.png", full_page=True)
+                logger.info("Indeed: Debug screenshot saved to ./data/indeed_debug.png")
 
             for i in range(count):
                 try:
