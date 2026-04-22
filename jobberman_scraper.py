@@ -79,6 +79,13 @@ def jobberman_scraper():
                 page.goto("https://www.jobberman.com/")
                 human_delay(2, 5)
 
+                # Dismiss cookie consent (blocks clicks on fresh browser/CI)
+                try:
+                    page.locator("#onetrust-accept-btn-handler").click(timeout=5000)
+                    human_delay(1, 2)
+                except Exception:
+                    pass
+
                 page.mouse.move(random.randint(200, 600), random.randint(200, 500))
                 human_delay()
 

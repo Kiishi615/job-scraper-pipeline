@@ -141,8 +141,8 @@ def linkedin_scraper():
                 with open(cookie_file, "r") as f:
                     cookies = json.load(f)
             except FileNotFoundError:
-                logger.error(f"LinkedIn: {cookie_file} not found — cannot authenticate")
-                raise
+                logger.warning(f"LinkedIn: {cookie_file} not found — skipping LinkedIn scraper")
+                return
             except json.JSONDecodeError as e:
                 logger.error(f"LinkedIn: {cookie_file} is malformed — {e}")
                 raise
