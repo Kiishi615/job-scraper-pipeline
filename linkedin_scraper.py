@@ -137,68 +137,25 @@ def linkedin_scraper():
             Stealth().apply_stealth_sync(page)
 
             try:
-                page.goto("https://www.linkedin.com/jobs/search?trk=guest_homepage-basic_guest_nav_menu_jobs")
+                # Go directly to pre-filtered results — no clicking needed
+                search_url = (
+                    f"https://www.linkedin.com/jobs/search?"
+                    f"keywords={search_term.replace(' ', '%20')}"
+                    f"&location={location_text}"
+                    f"&geoId=92000001"
+                    f"&f_TPR=r86400"   # past 24 hours
+                    f"&f_E=2"          # entry level
+                    f"&position=1&pageNum=0"
+                )
+                page.goto(search_url)
                 page.wait_for_load_state("domcontentloaded")
-                
-                dismiss_popup()
-                human_delay(1, 3)
+                human_delay(3, 6)
 
                 dismiss_popup()
-                human_click(page.get_by_role("combobox", name=SELECTORS["search_box"]))
-                human_delay(0.5, 1.5)
-                page.get_by_role("combobox", name=SELECTORS["search_box"]).press_sequentially(search_term, delay=random.randint(80, 160))
-                human_delay(0.5, 1)
-                
-                dismiss_popup()
-                page.keyboard.press("Enter")
-                page.wait_for_load_state("domcontentloaded")
-                human_delay(2, 5)
-
-                dismiss_popup()
-                human_click(page.get_by_role("combobox", name=SELECTORS["location_box"]))
-                human_delay(0.3, 1)
-                page.get_by_role("combobox", name=SELECTORS["location_box"]).clear()
-                page.get_by_role("combobox", name=SELECTORS["location_box"]).press_sequentially(location_text, delay=random.randint(80, 160))
-                human_delay(0.3, 0.8)
-                page.keyboard.press("Enter")
-                
-                dismiss_popup()
-                human_click(page.get_by_role("button", name=SELECTORS["search_btn"], exact=True))
-                page.wait_for_load_state("domcontentloaded")
-                human_delay(2, 5) 
-
                 page.evaluate("window.scrollBy(0, 300)")
-                human_delay(0.5, 1.5)
-
-                # Filters are optional — guest UI from datacenter IPs may not show them
-                try:
-                    dismiss_popup()
-                    human_click(page.get_by_role("button", name=SELECTORS["experience_filter"]))
-                    human_delay(0.5, 1)
-                    page.get_by_role("checkbox", name=SELECTORS["entry_level"]).check()
-                    human_delay(0.3, 0.8)
-                    dismiss_popup()
-                    human_click(page.get_by_role("button", name=SELECTORS["done_btn"]))
-                    page.wait_for_load_state("domcontentloaded")
-                    human_delay(2, 4)
-                except Exception:
-                    logger.warning("LinkedIn: Experience filter not available — continuing without it")
-
-                try:
-                    dismiss_popup()
-                    human_click(page.get_by_role("button", name=SELECTORS["date_filter"]))
-                    human_delay(0.5, 1)
-                    page.get_by_role("radio", name=SELECTORS["past_24h"]).check()
-                    human_delay(0.3, 0.8)
-                    dismiss_popup()
-                    human_click(page.get_by_role("button", name=SELECTORS["done_btn"]))
-                    page.wait_for_load_state("domcontentloaded")
-                    human_delay(2, 4)
-                except Exception:
-                    logger.warning("LinkedIn: Date filter not available — continuing without it")
-
+                human_delay(1, 2)
             except Exception as e:
-                logger.error(f"LinkedIn: Search/filter flow failed — {e}")
+                logger.error(f"LinkedIn: Failed to load search results — {e}")
                 raise
 
 
