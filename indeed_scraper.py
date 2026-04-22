@@ -76,8 +76,8 @@ def indeed_scraper():
             Stealth().apply_stealth_sync(page)
 
             try:
-                # Go directly to search results — homepage may show CAPTCHA from datacenter IPs
-                search_url = f"https://ng.indeed.com/jobs?q={search_term.replace(' ', '+')}&l={location}"
+                # Go directly to search results with desktop referrer
+                search_url = f"https://ng.indeed.com/jobs?q={search_term.replace(' ', '%20')}&l={location}&from=searchOnDesktopSerp"
                 page.goto(search_url)
                 page.wait_for_load_state("networkidle")
                 human_delay(2, 5)
