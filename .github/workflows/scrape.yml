@@ -45,7 +45,7 @@ jobs:
         run: |
           Xvfb :99 -screen 0 1366x768x24 -nolisten tcp &
           sleep 2
-          cp pipeline.docker.cfg pipeline.cfg
+          cp pipeline.ci.cfg pipeline.cfg
           python -c "
           import logging
           logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(name)s | %(levelname)s | %(message)s', handlers=[logging.FileHandler('data/pipeline.log'), logging.StreamHandler()])
