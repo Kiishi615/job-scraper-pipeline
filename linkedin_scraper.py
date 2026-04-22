@@ -145,21 +145,21 @@ def linkedin_scraper():
 
                 dismiss_popup()
                 human_click(page.get_by_role("combobox", name=SELECTORS["search_box"]))
-                human_delay(0.5, 1.5)  # about to type
+                human_delay(0.5, 1.5)
                 page.get_by_role("combobox", name=SELECTORS["search_box"]).press_sequentially(search_term, delay=random.randint(80, 160))
-                human_delay(0.5, 1)  # reading what I typed
+                human_delay(0.5, 1)
                 
                 dismiss_popup()
                 page.keyboard.press("Enter")
                 page.wait_for_load_state("domcontentloaded")
-                human_delay(2, 5)  # scanning results
+                human_delay(2, 5)
 
                 dismiss_popup()
                 human_click(page.get_by_role("combobox", name=SELECTORS["location_box"]))
-                human_delay(0.3, 1)  # about to type
+                human_delay(0.3, 1)
                 page.get_by_role("combobox", name=SELECTORS["location_box"]).clear()
                 page.get_by_role("combobox", name=SELECTORS["location_box"]).press_sequentially(location_text, delay=random.randint(80, 160))
-                human_delay(0.3, 0.8)  # reading what I typed
+                human_delay(0.3, 0.8)
                 page.keyboard.press("Enter")
                 
                 dismiss_popup()
@@ -168,29 +168,35 @@ def linkedin_scraper():
                 human_delay(2, 5) 
 
                 page.evaluate("window.scrollBy(0, 300)")
-                human_delay(0.5, 1.5)  # scrolling down to find filters
-                
-                dismiss_popup()
-                human_click(page.get_by_role("button", name=SELECTORS["experience_filter"]))
-                human_delay(0.5, 1)  # reading options
-                page.get_by_role("checkbox", name=SELECTORS["entry_level"]).check()
-                human_delay(0.3, 0.8)  # made a selection
-                
-                dismiss_popup()
-                human_click(page.get_by_role("button", name=SELECTORS["done_btn"]))
-                page.wait_for_load_state("domcontentloaded")
-                human_delay(2, 4)  # waiting for filtered results
+                human_delay(0.5, 1.5)
 
-                dismiss_popup()
-                human_click(page.get_by_role("button", name=SELECTORS["date_filter"]))
-                human_delay(0.5, 1)  # reading options
-                page.get_by_role("radio", name=SELECTORS["past_24h"]).check()
-                human_delay(0.3, 0.8)  # made a selection
-                
-                dismiss_popup()
-                human_click(page.get_by_role("button", name=SELECTORS["done_btn"]))
-                page.wait_for_load_state("domcontentloaded")
-                human_delay(2, 4)
+                # Filters are optional — guest UI from datacenter IPs may not show them
+                try:
+                    dismiss_popup()
+                    human_click(page.get_by_role("button", name=SELECTORS["experience_filter"]))
+                    human_delay(0.5, 1)
+                    page.get_by_role("checkbox", name=SELECTORS["entry_level"]).check()
+                    human_delay(0.3, 0.8)
+                    dismiss_popup()
+                    human_click(page.get_by_role("button", name=SELECTORS["done_btn"]))
+                    page.wait_for_load_state("domcontentloaded")
+                    human_delay(2, 4)
+                except Exception:
+                    logger.warning("LinkedIn: Experience filter not available — continuing without it")
+
+                try:
+                    dismiss_popup()
+                    human_click(page.get_by_role("button", name=SELECTORS["date_filter"]))
+                    human_delay(0.5, 1)
+                    page.get_by_role("radio", name=SELECTORS["past_24h"]).check()
+                    human_delay(0.3, 0.8)
+                    dismiss_popup()
+                    human_click(page.get_by_role("button", name=SELECTORS["done_btn"]))
+                    page.wait_for_load_state("domcontentloaded")
+                    human_delay(2, 4)
+                except Exception:
+                    logger.warning("LinkedIn: Date filter not available — continuing without it")
+
             except Exception as e:
                 logger.error(f"LinkedIn: Search/filter flow failed — {e}")
                 raise

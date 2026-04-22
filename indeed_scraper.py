@@ -76,27 +76,11 @@ def indeed_scraper():
             Stealth().apply_stealth_sync(page)
 
             try:
-                page.goto("https://ng.indeed.com")
-                human_delay(2, 5)
-
-                page.mouse.move(random.randint(200, 600), random.randint(200, 500))
-                human_delay()
-
-                page.locator(SELECTORS["search_what"]).click()
-                human_delay(0.5, 1.5)
-                page.locator(SELECTORS["search_where"]).clear()
-                page.locator(SELECTORS["search_what"]).press_sequentially(search_term, delay=random.randint(80, 160))
-                human_delay()
-
-                page.locator(SELECTORS["search_where"]).click()
-                human_delay(0.5, 1)
-                page.locator(SELECTORS["search_where"]).clear()
-                page.locator(SELECTORS["search_where"]).press_sequentially(location, delay=100)
-                human_delay()
-
-                page.keyboard.press("Enter")
+                # Go directly to search results — homepage may show CAPTCHA from datacenter IPs
+                search_url = f"https://ng.indeed.com/jobs?q={search_term.replace(' ', '+')}&l={location}"
+                page.goto(search_url)
                 page.wait_for_load_state("networkidle")
-                human_delay(2, 4)
+                human_delay(2, 5)
             except Exception as e:
                 logger.error(f"Indeed: Search flow failed — {e}")
                 raise
