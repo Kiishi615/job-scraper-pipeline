@@ -80,7 +80,37 @@ def indeed_scraper():
                 search_url = f"https://ng.indeed.com/jobs?q={search_term.replace(' ', '%20')}&l={location}&from=searchOnDesktopSerp"
                 page.goto(search_url)
                 page.wait_for_load_state("networkidle")
-                human_delay(2, 5)
+                human_delay(2, 4)
+
+                # Detect and solve Cloudflare challenge if present
+                for attempt in range(3):
+                    page_text = page.content().lower()
+                    if "challenge" in page_text or "verify" in page_text or "checking" in page_text:
+                        logger.info(f"Indeed: Cloudflare challenge detected (attempt {attempt + 1}/3)")
+                        page.screenshot(path=f"./data/indeed_cf_attempt_{attempt}.png", full_page=True)
+
+                        # Try clicking the Turnstile checkbox inside its iframe
+                        try:
+                            cf_iframe = page.frame_locator("iframe[src*='challenges'], iframe[src*='turnstile'], iframe[title*='challenge']")
+                            cf_iframe.locator("input[type='checkbox'], .cb-lb, #challenge-stage").first.click(timeout=5000)
+                            logger.info("Indeed: Clicked Cloudflare checkbox")
+                        except Exception:
+                            # Sometimes there's no checkbox — just wait for auto-solve
+                            logger.info("Indeed: No checkbox found, waiting for auto-verification...")
+
+                        # Wait for Cloudflare to process
+                        human_delay(5, 10)
+                        page.wait_for_load_state("networkidle")
+
+                        # If still on challenge, try clicking anywhere in the page body
+                        if "challenge" in page.content().lower():
+                            page.mouse.click(random.randint(400, 600), random.randint(300, 500))
+                            human_delay(3, 6)
+                            page.wait_for_load_state("networkidle")
+                    else:
+                        break
+
+                human_delay(1, 3)
             except Exception as e:
                 logger.error(f"Indeed: Search flow failed — {e}")
                 raise
