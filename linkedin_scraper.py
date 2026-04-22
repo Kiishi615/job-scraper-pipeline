@@ -121,7 +121,6 @@ def linkedin_scraper():
     search_term = config.get("linkedin", "search_term", fallback="AI Engineering")
     location_text = config.get("linkedin", "location", fallback="Remote")
     user_data_dir = config.get("linkedin", "user_data_dir", fallback=r"C:\Users\Audit\firefox_linkedin_profile")
-    cookie_file = config.get("linkedin", "cookie_file", fallback="linkedin_cookies.json")
     output_file = config.get("linkedin", "output_file", fallback="linkedin_jobs.json")
     max_cards = config.getint("linkedin", "max_cards", fallback=15)
 
@@ -136,31 +135,6 @@ def linkedin_scraper():
             )
             page = context.pages[0] if context.pages else context.new_page()
             Stealth().apply_stealth_sync(page)
-
-            try:
-                with open(cookie_file, "r") as f:
-                    cookies = json.load(f)
-            except FileNotFoundError:
-                logger.warning(f"LinkedIn: {cookie_file} not found — skipping LinkedIn scraper")
-                return
-            except json.JSONDecodeError as e:
-                logger.error(f"LinkedIn: {cookie_file} is malformed — {e}")
-                raise
-
-            formatted = []
-            try:
-                for c in cookies:
-                    formatted.append({
-                        "name": c["Name raw"],
-                        "value": c["Content raw"],
-                        "domain": c["Host raw"].replace("https://", "").replace("http://", "").rstrip("/"),
-                        "path": c["Path raw"],
-                    })
-            except KeyError as e:
-                logger.error(f"LinkedIn: Cookie format unexpected, missing key {e}")
-                raise
-
-            context.add_cookies(formatted)
 
             try:
                 page.goto("https://www.linkedin.com/jobs/search?trk=guest_homepage-basic_guest_nav_menu_jobs")
