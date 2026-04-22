@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.ipynb
+delete_me.*
+output.json
+sample_results.json
+uv.lock
+.git/
+*.pyc
+pipeline.cfg
+pipeline.log
+robust_scraper.py
+basic_scraping.py
+selenium_basics.py
+serp_scraper.py
+pipeline.py
+.python-version
