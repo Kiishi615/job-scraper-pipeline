@@ -26,22 +26,35 @@ jobs:
       - name: Create data directory
         run: mkdir -p data
 
-      - name: Build Docker image
-        run: docker build -t job-scraper .
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements_docker.txt
+
+      - name: Install Firefox for Playwright
+        run: playwright install firefox --with-deps
 
       - name: Run pipeline
         env:
           TELEGRAM_API_KEY: ${{ secrets.TELEGRAM_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DISPLAY: ':99'
         run: |
-          docker run --rm \
-            -e TELEGRAM_API_KEY \
-            -e OPENAI_API_KEY \
-            -v ${{ github.workspace }}/data:/app/data \
-            job-scraper \
-            python -c "from main import run; run()"
+          Xvfb :99 -screen 0 1366x768x24 -nolisten tcp &
+          sleep 2
+          cp pipeline.docker.cfg pipeline.cfg
+          python -c "
+          import logging
+          logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(name)s | %(levelname)s | %(message)s', handlers=[logging.FileHandler('data/pipeline.log'), logging.StreamHandler()])
+          from main import run
+          run()
+          "
 
       - name: Save persistent data
+        if: always()
         uses: actions/cache/save@v4
         with:
           path: data/
