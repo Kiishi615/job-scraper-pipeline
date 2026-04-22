@@ -297,3 +297,6 @@ def linkedin_scraper():
     except Exception as e:
         logger.error(f"LinkedIn: Browser launch/setup failed — {e}")
         raise
+
+if __name__ == "__main__":
+    linkedin_scraper()

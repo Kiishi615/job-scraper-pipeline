@@ -26,9 +26,6 @@ jobs:
       - name: Create data directory
         run: mkdir -p data
 
-      - name: Decode LinkedIn cookies
-        run: echo "${{ secrets.LINKEDIN_COOKIES_B64 }}" | base64 -d > data/linkedin_cookies.json
-
       - name: Build Docker image
         run: docker build -t job-scraper .
 
