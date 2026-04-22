@@ -8,12 +8,12 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends xvfb && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Firefox for Playwright
-RUN playwright install firefox
-
-# Install Python dependencies (slim list, not the full 351-line requirements.txt)
+# Install Python dependencies FIRST (so playwright CLI is available)
 COPY requirements_docker.txt .
 RUN pip install --no-cache-dir -r requirements_docker.txt
+
+# NOW install Firefox browser binaries
+RUN playwright install firefox
 
 # Copy application code
 COPY *.py ./
@@ -22,7 +22,6 @@ COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh
 
 # Xvfb creates a virtual display on :99
-# The scrapers run with headless=False, thinking they have a real screen
 ENV DISPLAY=:99
 
 ENTRYPOINT ["./entrypoint.sh"]
