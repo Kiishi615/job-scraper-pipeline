@@ -1,0 +1,59 @@
+name: Job Scraper Pipeline
+
+on:
+  schedule:
+    # 7:30 AM WAT (6:30 UTC) — Nigeria + UK/EU morning posts
+    - cron: '30 6 * * *'
+    # 4:00 PM WAT (15:00 UTC) — US East Coast morning posts
+    - cron: '0 15 * * *'
+  workflow_dispatch:  # Manual trigger button in GitHub UI
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Restore persistent data
+        uses: actions/cache/restore@v4
+        with:
+          path: data/
+          key: scraper-data
+
+      - name: Create data directory
+        run: mkdir -p data
+
+      - name: Decode LinkedIn cookies
+        run: echo "${{ secrets.LINKEDIN_COOKIES_B64 }}" | base64 -d > data/linkedin_cookies.json
+
+      - name: Build Docker image
+        run: docker build -t job-scraper .
+
+      - name: Run pipeline
+        env:
+          TELEGRAM_API_KEY: ${{ secrets.TELEGRAM_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          docker run --rm \
+            -e TELEGRAM_API_KEY \
+            -e OPENAI_API_KEY \
+            -v ${{ github.workspace }}/data:/app/data \
+            job-scraper \
+            python -c "from main import run; run()"
+
+      - name: Save persistent data
+        uses: actions/cache/save@v4
+        with:
+          path: data/
+          key: scraper-data-${{ github.run_id }}
+
+      - name: Upload logs as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-log-${{ github.run_id }}
+          path: data/pipeline.log
+          retention-days: 7

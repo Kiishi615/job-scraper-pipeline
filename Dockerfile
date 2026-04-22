@@ -18,12 +18,12 @@ RUN pip install --no-cache-dir -r requirements_docker.txt
 # Copy application code
 COPY *.py ./
 COPY pipeline.docker.cfg ./pipeline.cfg
+COPY entrypoint.sh ./
+RUN chmod +x entrypoint.sh
 
 # Xvfb creates a virtual display on :99
 # The scrapers run with headless=False, thinking they have a real screen
 ENV DISPLAY=:99
 
-# Start Xvfb in the background, then run the scheduler
-CMD Xvfb :99 -screen 0 1366x768x24 -nolisten tcp -nolisten unix & \
-    sleep 2 && \
-    python scheduler.py
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["python", "scheduler.py"]
