@@ -164,7 +164,9 @@ def linkedin_scraper():
 
             count = job_cards.count()
             if count == 0:
-                logger.warning("LinkedIn: No job cards found after search")
+                logger.warning(f"LinkedIn: No job cards found — current URL: {page.url}")
+                page.screenshot(path="./data/linkedin_debug.png", full_page=True)
+                logger.info("LinkedIn: Debug screenshot saved")
             logger.info(f"LinkedIn: Found {count} job cards")
 
             consecutive_authwalls = 0
