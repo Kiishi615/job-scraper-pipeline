@@ -3,9 +3,11 @@ import json
 import logging
 import os
 import random
+import re
 import time
+from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
 from playwright_stealth import Stealth
 
 logger = logging.getLogger(__name__)
@@ -23,8 +25,103 @@ SELECTORS = {
     "location": "#jobLocationText",
 }
 
+VERIFICATION_TEXT = re.compile(
+    r"^(Additional Verification Required|Verify you are human|"
+    r"Checking your browser.*|Just a moment.*)$", re.I
+)
+
 def human_delay(a=1.5, b=3.5):
     time.sleep(random.uniform(a, b))
+
+
+def wait_for_search_content(timeout=15000):
+    """Wait for useful content without waiting for ads and trackers to stop."""
+    jobs = page.locator(SELECTORS["job_cards"])
+    verification = page.get_by_text(VERIFICATION_TEXT)
+    empty_results = page.get_by_text(re.compile(
+        r"did not match any jobs|no jobs found", re.I
+    ))
+    try:
+        jobs.or_(verification).or_(empty_results).filter(visible=True).first.wait_for(
+            state="visible", timeout=timeout
+        )
+    except PlaywrightTimeoutError:
+        logger.warning("Indeed: No job cards, verification message or empty-results message appeared")
+
+
+def verification_required():
+    # Inspect visible text, rather than matching words in scripts or job adverts.
+    return page.get_by_text(VERIFICATION_TEXT).filter(visible=True).count() > 0
+
+
+def capture_verification_diagnostics(attempt, stage, click_error=None):
+    """Save inspection evidence; diagnostic failures must not stop scraping."""
+    # These are the same selectors used by the existing click attempt below.
+    iframe_selector = "iframe[src*='challenges'], iframe[src*='turnstile'], iframe[title*='challenge']"
+    click_selector = "input[type='checkbox'], .cb-lb, #challenge-stage"
+    try:
+        directory = Path("data")
+        directory.mkdir(parents=True, exist_ok=True)
+        prefix = f"indeed_verification_attempt_{attempt}_{stage}"
+        report = {
+            "attempt": attempt,
+            "stage": stage,
+            "page_url": page.url,
+            "iframe_selector": iframe_selector,
+            "click_selector": click_selector,
+            "click_error": click_error,
+            "frames": [],
+            "errors": [],
+        }
+        try:
+            (directory / f"{prefix}_page.html").write_text(page.content(), encoding="utf-8")
+        except Exception as error:
+            report["errors"].append(f"Main page HTML: {type(error).__name__}: {error}")
+
+        report["iframe_count"] = page.locator("iframe").count()
+        report["matching_iframe_count"] = page.locator(iframe_selector).count()
+        logger.info(
+            "Indeed diagnostics (%s, attempt %s): %s iframe(s), %s match the existing iframe selector",
+            stage, attempt, report["iframe_count"], report["matching_iframe_count"],
+        )
+        for index, frame in enumerate(page.frames):
+            if frame == page.main_frame:
+                continue
+            details = {"index": index, "url": frame.url, "name": frame.name, "errors": []}
+            report["frames"].append(details)
+            try:
+                details["iframe_element"] = frame.frame_element().evaluate(
+                    """(element, selector) => ({
+                        src: element.getAttribute('src'),
+                        title: element.getAttribute('title'),
+                        id: element.getAttribute('id'),
+                        outer_html: element.outerHTML,
+                        matches_existing_selector: element.matches(selector)
+                    })""", iframe_selector
+                )
+            except Exception as error:
+                details["errors"].append(f"Iframe attributes: {type(error).__name__}: {error}")
+            try:
+                html_file = f"{prefix}_frame_{index}.html"
+                (directory / html_file).write_text(frame.content(), encoding="utf-8")
+                details["html_file"] = html_file
+            except Exception as error:
+                details["errors"].append(f"Frame HTML: {type(error).__name__}: {error}")
+            try:
+                details["selector_counts"] = {
+                    selector: frame.locator(selector).count()
+                    for selector in ("input[type='checkbox']", ".cb-lb", "#challenge-stage", click_selector)
+                }
+                logger.info("Indeed diagnostics frame %s: selector counts %s", index, details["selector_counts"])
+            except Exception as error:
+                details["errors"].append(f"Selector counts: {type(error).__name__}: {error}")
+
+        report_path = directory / f"{prefix}_report.json"
+        report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+        logger.info("Indeed: Verification diagnostics saved to %s", report_path)
+    except Exception:
+        logger.warning("Indeed: Could not save verification diagnostics", exc_info=True)
+
 
 def collector(tag: str) -> str | None:
     try:
@@ -78,35 +175,39 @@ def indeed_scraper():
             try:
                 # Go directly to search results with desktop referrer
                 search_url = f"https://ng.indeed.com/jobs?q={search_term.replace(' ', '%20')}&l={location}&from=searchOnDesktopSerp"
-                page.goto(search_url)
-                page.wait_for_load_state("networkidle")
+                page.goto(search_url, wait_until="domcontentloaded")
+                wait_for_search_content()
                 human_delay(2, 4)
 
                 # Detect and solve Cloudflare challenge if present
                 for attempt in range(3):
-                    page_text = page.content().lower()
-                    if "challenge" in page_text or "verify" in page_text or "checking" in page_text:
+                    if verification_required():
                         logger.info(f"Indeed: Cloudflare challenge detected (attempt {attempt + 1}/3)")
+                        os.makedirs("./data", exist_ok=True)
                         page.screenshot(path=f"./data/indeed_cf_attempt_{attempt}.png", full_page=True)
+                        capture_verification_diagnostics(attempt, "before_click")
 
                         # Try clicking the Turnstile checkbox inside its iframe
+                        click_error = None
                         try:
                             cf_iframe = page.frame_locator("iframe[src*='challenges'], iframe[src*='turnstile'], iframe[title*='challenge']")
                             cf_iframe.locator("input[type='checkbox'], .cb-lb, #challenge-stage").first.click(timeout=5000)
                             logger.info("Indeed: Clicked Cloudflare checkbox")
-                        except Exception:
+                        except Exception as e:
+                            click_error = f"{type(e).__name__}: {e}"
                             # Sometimes there's no checkbox — just wait for auto-solve
-                            logger.info("Indeed: No checkbox found, waiting for auto-verification...")
+                            logger.info("Indeed: Could not click verification checkbox (%s), waiting...", e)
+                        capture_verification_diagnostics(attempt, "after_click", click_error)
 
                         # Wait for Cloudflare to process
                         human_delay(5, 10)
-                        page.wait_for_load_state("networkidle")
+                        wait_for_search_content()
 
                         # If still on challenge, try clicking anywhere in the page body
-                        if "challenge" in page.content().lower():
+                        if verification_required():
                             page.mouse.click(random.randint(400, 600), random.randint(300, 500))
                             human_delay(3, 6)
-                            page.wait_for_load_state("networkidle")
+                            wait_for_search_content()
                     else:
                         break
 
@@ -120,6 +221,7 @@ def indeed_scraper():
             if count == 0:
                 logger.warning("Indeed: No job cards found after search")
                 # Save screenshot so we can see what Indeed is actually showing
+                os.makedirs("./data", exist_ok=True)
                 page.screenshot(path="./data/indeed_debug.png", full_page=True)
                 logger.info("Indeed: Debug screenshot saved to ./data/indeed_debug.png")
 

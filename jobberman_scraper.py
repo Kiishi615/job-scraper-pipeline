@@ -3,9 +3,10 @@ import json
 import logging
 import os
 import random
+import re
 import time
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 from playwright_stealth import Stealth
 
 logger = logging.getLogger(__name__)
@@ -13,13 +14,14 @@ logger = logging.getLogger(__name__)
 page = None
 
 SELECTORS = {
-    "remote_link": "Remote (Work From Home)",
-    "search_box": "Search",
-    "search_btn": "#job-search-btn",
-    "job_function_btn": "Job Function",
-    "software_data_link": "Software & Data",
-    "job_cards": "p.text-lg",
-    "job_title": ".font-bold",
+    "remote_option": "Remote (Work From Home)",
+    "search_box": "Search title, keywords or company",
+    "location_box": "Location",
+    "search_btn": "Search",
+    "job_function_btn": "Job function",
+    "software_data_link": re.compile(r"^Software & Data \(\d+\)$", re.I),
+    "job_cards": 'h3 a[href*="/listings/"]',
+    "job_title": 'h1[data-cy="title-job"]',
     "employer": "h2.text-base.leading-6.font-normal",
     "pay": "div.flex-wrap.gap-x-6 span.inline-flex",
     "summary": "p.mt-4.text-sm",
@@ -30,6 +32,27 @@ SELECTORS = {
 
 def human_delay(a=1.5, b=3.5):
     time.sleep(random.uniform(a, b))
+
+
+def search_jobs(search_term: str):
+    # Desktop and mobile forms share placeholders; target the visible fields.
+    page.get_by_placeholder(SELECTORS["search_box"], exact=True).filter(visible=True).fill(search_term)
+    page.get_by_placeholder(SELECTORS["location_box"], exact=True).filter(visible=True).fill("Remote")
+    page.get_by_role("button", name=SELECTORS["remote_option"], exact=True).filter(visible=True).click()
+    with page.expect_navigation(wait_until="domcontentloaded"):
+        page.get_by_role("button", name=SELECTORS["search_btn"], exact=True).filter(visible=True).click()
+
+    job_function = page.get_by_role("button", name=SELECTORS["job_function_btn"], exact=True)
+    # Alpine adds aria-expanded when the menu is interactive. Clicking before
+    # initialization can be ignored even though the button is already visible.
+    expect(job_function).to_have_attribute("aria-expanded", "false", timeout=15000)
+    job_function.click()
+    # The filter label includes a result count. Card category links would reset
+    # the keyword and remote filters, so match the dropdown option explicitly.
+    with page.expect_navigation(wait_until="domcontentloaded"):
+        page.get_by_role("link", name=SELECTORS["software_data_link"]).filter(visible=True).click()
+    page.locator("h1").first.wait_for(state="visible")
+
 
 def collector(tag: str) -> str | None:
     try:
@@ -76,7 +99,8 @@ def jobberman_scraper():
             Stealth().apply_stealth_sync(page)
 
             try:
-                page.goto("https://www.jobberman.com/")
+                page.goto("https://www.jobberman.com/", wait_until="domcontentloaded")
+
                 human_delay(2, 5)
 
                 # Dismiss cookie consent (blocks clicks on fresh browser/CI)
@@ -89,19 +113,7 @@ def jobberman_scraper():
                 page.mouse.move(random.randint(200, 600), random.randint(200, 500))
                 human_delay()
 
-                page.get_by_role("link", name=SELECTORS["remote_link"]).click()
-                page.wait_for_load_state("networkidle")
-                
-                page.get_by_role("textbox", name=SELECTORS["search_box"]).click()
-                page.get_by_role("textbox", name=SELECTORS["search_box"]).press_sequentially(search_term, delay=random.randint(80, 160))
-                page.locator(SELECTORS["search_btn"]).click()
-                page.wait_for_load_state("networkidle")
-
-                human_delay()
-                
-                page.get_by_role("button", name=SELECTORS["job_function_btn"], exact=True).click()
-                page.get_by_role("link", name=SELECTORS["software_data_link"]).click()
-                page.wait_for_load_state("networkidle")
+                search_jobs(search_term)
                 human_delay()
             except Exception as e:
                 logger.error(f"Jobberman: Search/filter flow failed — {e}")
@@ -119,7 +131,7 @@ def jobberman_scraper():
                     # Re-query locator after each go_back to avoid stale references
                     job_cards = page.locator(SELECTORS["job_cards"]).filter(visible=True)
                     job_cards.nth(i).click()
-                    page.wait_for_load_state("networkidle")
+                    page.wait_for_load_state("domcontentloaded")
                     human_delay(2, 4)
 
                     job_title = collector(SELECTORS["job_title"])
@@ -155,14 +167,14 @@ def jobberman_scraper():
                 except Exception as e:
                     logger.error(f"Jobberman: Failed to scrape card {i} — {e}")
                     try:
-                        page.go_back()
+                        page.go_back(wait_until="domcontentloaded")
                     except Exception:
                         logger.error(f"Jobberman: go_back() also failed after card {i} error")
                     continue
                 human_delay(2, 4)
 
                 try:
-                    page.go_back()
+                    page.go_back(wait_until="domcontentloaded")
                 except Exception as e:
                     logger.error(f"Jobberman: go_back() failed after card {i} — {e}")
                     break
@@ -182,7 +194,7 @@ def jobberman_scraper():
             logger.error(f"Jobberman: Failed to write output file — {e}")
 
     except Exception as e:
-        logger.error(f"Jobberman: Browser launch/setup failed — {e}")
+        logger.error(f"Jobberman: Scraper failed — {e}")
         raise
 
         
