@@ -160,7 +160,7 @@ def indeed_scraper():
             try:
                 # Go directly to search results with desktop referrer
                 search_url = f"https://ng.indeed.com/jobs?q={search_term.replace(' ', '%20')}&l={location}&from=searchOnDesktopSerp"
-                page.goto(search_url, wait_until="networkidle")
+                page.goto(search_url, wait_until="load")
                 human_delay(2, 4)
 
                 # Detect and solve Cloudflare challenge if present
