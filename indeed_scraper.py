@@ -7,7 +7,7 @@ import re
 import time
 from pathlib import Path
 
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
+from playwright.sync_api import sync_playwright
 from playwright_stealth import Stealth
 
 logger = logging.getLogger(__name__)
@@ -32,21 +32,6 @@ VERIFICATION_TEXT = re.compile(
 
 def human_delay(a=1.5, b=3.5):
     time.sleep(random.uniform(a, b))
-
-
-def wait_for_search_content(timeout=15000):
-    """Wait for useful content without waiting for ads and trackers to stop."""
-    jobs = page.locator(SELECTORS["job_cards"])
-    verification = page.get_by_text(VERIFICATION_TEXT)
-    empty_results = page.get_by_text(re.compile(
-        r"did not match any jobs|no jobs found", re.I
-    ))
-    try:
-        jobs.or_(verification).or_(empty_results).filter(visible=True).first.wait_for(
-            state="visible", timeout=timeout
-        )
-    except PlaywrightTimeoutError:
-        logger.warning("Indeed: No job cards, verification message or empty-results message appeared")
 
 
 def verification_required():
@@ -175,8 +160,7 @@ def indeed_scraper():
             try:
                 # Go directly to search results with desktop referrer
                 search_url = f"https://ng.indeed.com/jobs?q={search_term.replace(' ', '%20')}&l={location}&from=searchOnDesktopSerp"
-                page.goto(search_url, wait_until="domcontentloaded")
-                wait_for_search_content()
+                page.goto(search_url, wait_until="networkidle")
                 human_delay(2, 4)
 
                 # Detect and solve Cloudflare challenge if present
@@ -201,13 +185,13 @@ def indeed_scraper():
 
                         # Wait for Cloudflare to process
                         human_delay(5, 10)
-                        wait_for_search_content()
+                        page.wait_for_load_state("networkidle")
 
                         # If still on challenge, try clicking anywhere in the page body
                         if verification_required():
                             page.mouse.click(random.randint(400, 600), random.randint(300, 500))
                             human_delay(3, 6)
-                            wait_for_search_content()
+                            page.wait_for_load_state("networkidle")
                     else:
                         break
 
